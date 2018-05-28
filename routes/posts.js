@@ -1,7 +1,19 @@
 var express  = require("express");
+var fs = require("fs")
 var router   = express.Router();
 var Post     = require("../models/Post");
 var util     = require("../util");
+var multer = require('multer');
+var storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/')
+    // cb(null, 'uploads/'+req.user._id+"/") // cb 콜백함수를 통해 전송된 파일 저장 디렉토리 설정
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname) // cb 콜백함수를 통해 전송된 파일 이름 설정
+  }
+})
+var upload = multer({ storage: storage })
 
 // Index
 router.get("/", function(req, res){
@@ -15,22 +27,35 @@ router.get("/", function(req, res){
 });
 
 // New
-router.get("/new", function(req, res){
+router.get("/new", util.isLoggedin, function(req, res){
   var post = req.flash("post")[0] || {};
   var errors = req.flash("errors")[0] || {};
   res.render("posts/new", { post:post, errors:errors });
 });
 
 // create
-router.post("/", function(req, res){
+router.post("/", upload.single("file"), util.isLoggedin, function(req, res){
   req.body.author = req.user._id;
+  // req.body.file = req.file
+  req.body.file = ""
+  // console.log(req.body.file)
   Post.create(req.body, function(err, post){
     if(err){
       req.flash("post", req.body);
       req.flash("errors", util.parseError(err));
       return res.redirect("/posts/new");
     }
-    res.redirect("/posts");
+    if(req.file){
+      var dir = './uploads/'+post._id;
+      if (!fs.existsSync(dir)){
+          fs.mkdirSync(dir);
+      }
+      post.update({file: req.file}, function(err, post2){
+        res.redirect("/posts");
+      })
+    }else{
+      res.redirect("/posts");
+    }
   });
 });
 
@@ -38,14 +63,26 @@ router.post("/", function(req, res){
 router.get("/:id", function(req, res){
   Post.findOne({_id:req.params.id})
   .populate("author")
+  .populate({ path: 'files.author'})
   .exec(function(err, post){
     if(err) return res.json(err);
     res.render("posts/show", {post:post});
   });
 });
 
+// show
+router.get("/:id/json", function(req, res){
+  Post.findOne({_id:req.params.id})
+  .populate("author")
+  .populate({ path: 'files.author'})
+  .exec(function(err, post){
+    if(err) return res.json(err);
+    return res.json({count: post.length,msg: "success", result: post});
+  });
+});
+
 // edit
-router.get("/:id/edit", function(req, res){
+router.get("/:id/edit", util.isLoggedin, checkPermission, function(req, res){
   var post = req.flash("post")[0];
   var errors = req.flash("errors")[0] || {};
   if(!post){
@@ -60,7 +97,7 @@ router.get("/:id/edit", function(req, res){
 });
 
 // update
-router.put("/:id", function(req, res){
+router.put("/:id", util.isLoggedin, checkPermission, function(req, res){
   req.body.updatedAt = Date.now();
   Post.findOneAndUpdate({_id:req.params.id}, req.body, {runValidators:true}, function(err, post){
     if(err){
@@ -73,11 +110,34 @@ router.put("/:id", function(req, res){
 });
 
 // destroy
-router.delete("/:id", function(req, res){
+router.delete("/:id", util.isLoggedin, checkPermission, function(req, res){
   Post.remove({_id:req.params.id}, function(err){
     if(err) return res.json(err);
     res.redirect("/posts");
   });
 });
 
+// file upload
+router.post("/:id/files",upload.single('file'), function(req, res){
+  Post.findById(req.params.id).exec((err, post)=>{
+    console.log(req.file)
+    post.files.push({title: req.file.originalname, file: req.file.path});
+    post.save((err,success_post)=>{
+      if(err) res.status(500).send(err);
+      res.render("posts/show", {post:post});
+    })
+  })
+})
+
+
 module.exports = router;
+
+// private functions
+function checkPermission(req, res, next){
+  Post.findOne({_id:req.params.id}, function(err, post){
+    if(err) return res.json(err);
+    if(post.author != req.user.id) return util.noPermission(req, res);
+
+    next();
+  });
+}

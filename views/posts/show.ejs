@@ -11,10 +11,12 @@
 
       <div class="buttons">
         <a class="btn btn-default" href="/posts">Back</a>
-        <a class="btn btn-default" href="/posts/<%= post._id %>/edit">Edit</a>
-        <form action="/posts/<%= post._id %>?_method=delete" method="post">
-          <a class="btn btn-default" href="#" onclick="confirm('Do you want to delete this?')?this.parentElement.submit():null;">Delete</a>
-        </form>
+        <% if(isAuthenticated && post.author && currentUser.id == post.author.id){ %>
+          <a class="btn btn-default" href="/posts/<%= post._id %>/edit">Edit</a>
+          <form action="/posts/<%= post._id %>?_method=delete" method="post">
+            <a class="btn btn-default" href="#" onclick="confirm('Do you want to delete this?')?this.parentElement.submit():null;">Delete</a>
+          </form>
+        <% } %>
       </div>
 
       <div class="contentBox">
@@ -30,11 +32,68 @@
             </div> <!-- post-info end -->
           </div> <!-- col end-->
           <div class="col-sm-8 col-sm-pull-4">
-            <div class="post-body"><%= post.body %></div>
+            <div class="post-body">
+              <%= post.body %>
+              <% if(post.file){ %>
+                <hr>
+                <a href="/<%= post.file %>"><%= post.title %></a>
+              <% } %>
+            </div>
           </div> <!-- col end-->
         </div> <!-- row end -->
       </div> <!-- post-container end -->
 
+
+      <form class="post-form form-horizontal" action="/posts/<%= post._id%>/files" method="post" enctype="multipart/form-data">
+        <div class="contentBox">
+          <h3 class="contentBoxTop">파일 첨부하기</h3>
+          <fieldset>
+            <!-- <div class="form-group">
+              <label for="title" class="col-sm-2 control-label">이름</label>
+              <div class="col-sm-10">
+                <input class="form-control" type="text" id="title" name="title" value="">
+              </div>
+            </div> -->
+            <div class="form-group">
+              <label for="body" class="col-sm-2 control-label">첨부 파일</label>
+              <div class="col-sm-10">
+                <input type="file" id="file" name="file">
+              </div>
+            </div>
+          </fieldset>
+        </div>
+        <div class="buttons">
+          <button type="submit" class="btn btn-default">Submit</button>
+        </div>
+      </form>
+
+      <div class="contentBox">
+        <h3 class="contentBoxTop">첨부 파일</h3>
+        <% if(post.files == null || post.files.lenght == 0){ %>
+          <div class="row">
+            <div class="col-sm-4 col-sm-push-8">
+              <div class="post-info">
+                첨부 파일이 없습니다.
+              </div> <!-- post-info end -->
+            </div>
+          </div>
+        <% } %>
+        <% post.files.forEach(function(file) { %>
+          <div class="row">
+            <div class="col-sm-4 col-sm-push-8">
+              <div class="post-info">
+                <!-- <div><span>Author</span> : <%= file.author ? file.author.username : "" %></div> -->
+                <div><span>Created</span> : <%= file.createdDate %> <%= file.createdTime %></div>
+              </div> <!-- post-info end -->
+            </div> <!-- col end-->
+            <div class="col-sm-7 col-sm-pull-4">
+              <div class="post-body">
+                <a href="/<%= file.file %>"><%= file.title %></a>
+              </div>
+            </div> <!-- col end-->
+          </div> <!-- row end -->
+        <% }) %>
+      </div> <!-- post-container end -->
     </div> <!-- container end -->
   </body>
 </html>
